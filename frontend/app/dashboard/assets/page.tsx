@@ -17,7 +17,7 @@ export default function AssetsPage() {
   const [showUpload, setShowUpload] = useState(false)
 
   // Mock team ID - replace with actual team context
-  const teamId = "team-123"
+  const teamId = "3b6e3b69-2c16-4a2a-91c7-4cf653ab9f22"
 
   const loadAssets = async () => {
     try {
