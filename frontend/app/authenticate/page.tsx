@@ -1,6 +1,7 @@
+'use client'
 // pages/authenticate.jsx
 import { useEffect } from 'react';
-import { useRouter } from 'next/router';
+import { useRouter } from 'next/navigation';
 import { useStytchMember } from '@stytch/nextjs/b2b';
 import { LoginOrSignupDiscoveryForm } from "@/components/LoginOrSignupDiscovery";
 
