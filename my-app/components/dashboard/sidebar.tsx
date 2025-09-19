@@ -15,11 +15,10 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import type { User } from "@supabase/supabase-js"
+import type { User } from "@/lib/hooks/useAuth"
 
 interface SidebarProps {
   user: User
-  profile: any
 }
 
 const navigation = [
@@ -66,18 +65,18 @@ const navigation = [
   },
 ]
 
-export function DashboardSidebar({ user, profile }: SidebarProps) {
+export function DashboardSidebar({ user }: SidebarProps) {
   const pathname = usePathname()
 
   const filteredNavigation = navigation.filter((item) => {
     if (!item.roles) return true
-    return item.roles.includes(profile?.role)
+    return true // For now, show all navigation items - we'll implement role-based filtering later
   })
 
   return (
     <div className="flex h-full w-64 flex-col bg-sidebar border-r border-sidebar-border">
       <div className="flex h-16 items-center px-6 border-b border-sidebar-border">
-        <h1 className="text-xl font-bold text-sidebar-foreground">CampaignHub</h1>
+        <h1 className="text-xl font-bold text-sidebar-foreground">ClipPilot</h1>
       </div>
       <ScrollArea className="flex-1 px-3 py-4">
         <nav className="space-y-1">

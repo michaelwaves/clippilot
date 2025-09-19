@@ -1,102 +1,157 @@
-import { createClient } from "@/lib/supabase/server"
+"use client";
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Users, Calendar, Crown } from "lucide-react"
-import Link from "next/link"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Plus, Users, Mail, Crown, UserPlus } from "lucide-react"
+import { useAuth } from "@/lib/hooks/useAuth"
+import { useTeamMembers } from "@/lib/hooks/useTeamMembers"
+import { useState } from "react"
 
-export default async function TeamsPage() {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+export default function TeamsPage() {
+  const { user, organization } = useAuth();
+  const { members, loading, inviteMember, updateMemberRoles } = useTeamMembers();
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState("member");
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
 
-  if (!user) return null
+  const handleInvite = async () => {
+    if (!inviteEmail.trim()) return;
 
-  // Get user's teams with member counts
-  const { data: userTeams } = await supabase
-    .from("team_members")
-    .select(`
-      *,
-      teams(
-        *,
-        team_members(count)
-      )
-    `)
-    .eq("user_id", user.id)
+    try {
+      setInviteLoading(true);
+      await inviteMember(inviteEmail, [inviteRole]);
+      setInviteEmail("");
+      setInviteRole("member");
+      setInviteDialogOpen(false);
+    } catch (error) {
+      console.error('Invitation failed:', error);
+    } finally {
+      setInviteLoading(false);
+    }
+  };
+
+  if (!user || !organization) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <div className="text-lg">Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-balance">Teams</h1>
-          <p className="text-muted-foreground">Manage your team memberships and collaborations</p>
+          <h1 className="text-3xl font-bold text-balance">Team Members</h1>
+          <p className="text-muted-foreground">Manage your team members and invitations for {organization.organization_name}</p>
         </div>
-        <Button>
-          <Plus className="h-4 w-4 mr-2" />
-          Join Team
-        </Button>
+        <Dialog open={inviteDialogOpen} onOpenChange={setInviteDialogOpen}>
+          <DialogTrigger asChild>
+            <Button>
+              <UserPlus className="h-4 w-4 mr-2" />
+              Invite Member
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Invite Team Member</DialogTitle>
+              <DialogDescription>
+                Send an invitation to join your organization
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="email">Email Address</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="colleague@company.com"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="role">Role</Label>
+                <Select value={inviteRole} onValueChange={setInviteRole}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="member">Member</SelectItem>
+                    <SelectItem value="admin">Admin</SelectItem>
+                    <SelectItem value="marketer">Marketer</SelectItem>
+                    <SelectItem value="manager">Manager</SelectItem>
+                    <SelectItem value="compliance">Compliance</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button
+                onClick={handleInvite}
+                disabled={inviteLoading || !inviteEmail.trim()}
+                className="w-full"
+              >
+                {inviteLoading ? "Sending Invitation..." : "Send Invitation"}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
 
-      {userTeams && userTeams.length > 0 ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {userTeams.map((membership) => (
-            <Card key={membership.id} className="hover:shadow-md transition-shadow">
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="space-y-1">
-                    <CardTitle className="text-lg">{membership.teams?.name}</CardTitle>
-                    <CardDescription>Team workspace</CardDescription>
+      <Card>
+        <CardHeader>
+          <CardTitle>Organization Members</CardTitle>
+          <CardDescription>
+            Manage members of {organization.organization_name}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="text-muted-foreground">Loading members...</div>
+            </div>
+          ) : members.length > 0 ? (
+            <div className="space-y-4">
+              {members.map((member) => (
+                <div key={member.member_id} className="flex items-center justify-between p-4 border rounded-lg">
+                  <div className="flex items-center space-x-4">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+                      <Mail className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className="font-medium">{member.name || member.email_address}</p>
+                      <p className="text-sm text-muted-foreground">{member.email_address}</p>
+                    </div>
                   </div>
-                  <Badge variant={membership.role === "admin" ? "default" : "secondary"}>
-                    {membership.role === "admin" ? (
-                      <>
-                        <Crown className="h-3 w-3 mr-1" />
-                        Admin
-                      </>
-                    ) : (
-                      "Member"
+                  <div className="flex items-center space-x-2">
+                    <Badge variant={member.status === 'active' ? 'default' : 'secondary'}>
+                      {member.status}
+                    </Badge>
+                    {member.roles && member.roles.length > 0 && (
+                      <Badge variant="outline">
+                        {member.roles.join(', ')}
+                      </Badge>
                     )}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div className="flex items-center text-sm text-muted-foreground">
-                    <Users className="h-4 w-4 mr-2" />
-                    {membership.teams?.team_members?.length || 0} members
-                  </div>
-                  <div className="flex items-center text-sm text-muted-foreground">
-                    <Calendar className="h-4 w-4 mr-2" />
-                    Joined {new Date(membership.created_at).toLocaleDateString()}
-                  </div>
-                  <div className="flex items-center justify-between pt-2">
-                    <Link href={`/dashboard/teams/${membership.teams?.id}`}>
-                      <Button variant="outline" size="sm">
-                        View Team
-                      </Button>
-                    </Link>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      ) : (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <Users className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-medium mb-2">No teams yet</h3>
-            <p className="text-muted-foreground text-center mb-6">
-              Join a team to start collaborating on marketing campaigns
-            </p>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              Join Your First Team
-            </Button>
-          </CardContent>
-        </Card>
-      )}
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-8 text-center">
+              <Users className="h-12 w-12 text-muted-foreground mb-4" />
+              <h3 className="text-lg font-medium mb-2">No team members yet</h3>
+              <p className="text-muted-foreground mb-4">
+                Invite colleagues to start collaborating on marketing campaigns
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }
