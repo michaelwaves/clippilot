@@ -1,5 +1,5 @@
 -- ===== ENUM TYPES =====
-CREATE TYPE asset_type AS ENUM ('logo', 'font', 'color', 'video_snippet');
+CREATE TYPE asset_type AS ENUM ('logo', 'font', 'color', 'video','image');
 CREATE TYPE campaign_status AS ENUM ('draft', 'pending_approval', 'approved', 'rejected', 'published');
 CREATE TYPE approval_status AS ENUM ('approved', 'rejected');
 CREATE TYPE platform_type AS ENUM ('linkedin', 'youtube', 'instagram', 'tiktok');
