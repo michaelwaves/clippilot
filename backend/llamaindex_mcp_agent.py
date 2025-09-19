@@ -193,11 +193,31 @@ Only call tools when the user specifically requests an action that requires them
             if system_prompt:
                 full_prompt = f"System: {system_prompt}\n\nUser: {message}"
 
-            # Stream the response
-            response = await self.agent.astream_chat(full_prompt)
-
-            async for token in response.async_response_gen():
-                yield token
+            # Try different streaming approaches based on LlamaIndex version
+            try:
+                # Try newer API
+                response = self.agent.stream_chat(full_prompt)
+                if hasattr(response, 'response_gen'):
+                    for token in response.response_gen:
+                        yield token
+                elif hasattr(response, 'async_response_gen'):
+                    async for token in response.async_response_gen():
+                        yield token
+                else:
+                    yield str(response)
+            except AttributeError:
+                try:
+                    # Try older async API
+                    response = await self.agent.achat(full_prompt)
+                    yield str(response)
+                except AttributeError:
+                    try:
+                        # Try basic chat API
+                        response = self.agent.chat(full_prompt)
+                        yield str(response)
+                    except AttributeError:
+                        # Last resort - return error message
+                        yield "LlamaIndex agent not properly configured or missing dependencies"
 
         except Exception as e:
             logger.error(f"Error in stream_response: {str(e)}")
@@ -261,9 +281,14 @@ Only call tools when the user specifically requests an action that requires them
 
         try:
             logger.info(f"Processing user query: {message}")
-            # Use the correct method for ReActAgent
-            response = self.agent.chat(message)
-            return str(response)
+            # Use the stream_response method and collect all chunks
+            response_chunks = []
+            async for chunk in self.stream_response(message):
+                if chunk and chunk != "Error: " and not chunk.startswith("Error:"):
+                    response_chunks.append(chunk)
+
+            full_response = "".join(response_chunks)
+            return full_response if full_response else "No response generated"
         except Exception as e:
             logger.error(f"Error processing query: {str(e)}")
             return f"Error: {str(e)}"
