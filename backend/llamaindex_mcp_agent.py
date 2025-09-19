@@ -8,6 +8,7 @@ from llama_index.llms.openai import OpenAI
 from llama_index.core.agent import ReActAgent
 from llama_index.core.tools import BaseTool, FunctionTool
 from llama_index.core.callbacks import CallbackManager
+from llama_index.core.agent.workflow import AgentStream
 import logging
 
 load_dotenv()
@@ -183,7 +184,7 @@ Only call tools when the user specifically requests an action that requires them
                 raise e
 
     async def stream_response(self, message: str, system_prompt: str = None) -> AsyncGenerator[str, None]:
-        """Stream response from the agent"""
+        """Stream response from the agent using workflow-based streaming"""
         if not self.agent:
             await self.initialize()
 
@@ -193,36 +194,48 @@ Only call tools when the user specifically requests an action that requires them
             if system_prompt:
                 full_prompt = f"System: {system_prompt}\n\nUser: {message}"
 
-            # Use the correct ReActAgent API
-            try:
-                # ReActAgent uses the run() method
-                response = await self.agent.run(full_prompt)
+            # Start the agent workflow (don't await - we want the handler)
+            handler = self.agent.run(full_prompt)
 
-                # Check if response has streaming capabilities
-                if hasattr(response, 'response'):
-                    # Extract the response content
-                    yield str(response.response)
-                elif hasattr(response, 'content'):
-                    yield str(response.content)
-                else:
-                    # Fallback: convert response to string
-                    yield str(response)
+            logger.info("Starting agent workflow streaming...")
 
-            except Exception as e:
-                # Fallback: try synchronous run method
-                try:
-                    response = self.agent.run(full_prompt)
-                    if hasattr(response, 'response'):
-                        yield str(response.response)
-                    elif hasattr(response, 'content'):
-                        yield str(response.content)
+            # Stream events as they come in real-time
+            async for event in handler.stream_events():
+                logger.debug(f"Received event: {type(event).__name__}")
+
+                if isinstance(event, AgentStream):
+                    # This is the actual streaming content from the LLM
+                    if hasattr(event, 'delta') and event.delta:
+                        logger.debug(f"Streaming delta: {event.delta}")
+                        yield str(event.delta)
+                    elif hasattr(event, 'content') and event.content:
+                        logger.debug(f"Streaming content: {event.content}")
+                        yield str(event.content)
                     else:
-                        yield str(response)
-                except Exception as e2:
-                    error_msg = f"LlamaIndex agent run error: {str(e2)}"
-                    if not self.openai_api_key:
-                        error_msg += " - OpenAI API key is missing or not loaded"
-                    yield error_msg
+                        logger.debug(f"AgentStream event without delta/content: {event}")
+
+                # We can also handle other event types for debugging
+                # elif isinstance(event, ToolCall):
+                #     logger.info(f"Tool called: {event.tool_name}")
+                #     yield f"\n[Using tool: {event.tool_name}]\n"
+                # elif isinstance(event, ToolCallResult):
+                #     logger.info(f"Tool result received")
+                #     yield f"[Tool completed]\n"
+
+            # If we reach here, the workflow is complete
+            logger.info("Agent workflow streaming completed")
+
+            # Get the final result in case streaming didn't capture everything
+            try:
+                final_result = await handler.result()
+                if hasattr(final_result, 'response') and final_result.response:
+                    # Only yield if we haven't streamed content yet
+                    response_text = str(final_result.response)
+                    if response_text and response_text.strip():
+                        logger.debug("Yielding final result as fallback")
+                        yield response_text
+            except Exception as e:
+                logger.warning(f"Could not get final result: {e}")
 
         except Exception as e:
             logger.error(f"Error in stream_response: {str(e)}")
