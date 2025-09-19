@@ -193,31 +193,36 @@ Only call tools when the user specifically requests an action that requires them
             if system_prompt:
                 full_prompt = f"System: {system_prompt}\n\nUser: {message}"
 
-            # Try different streaming approaches based on LlamaIndex version
+            # Use the correct ReActAgent API
             try:
-                # Try newer API
-                response = self.agent.stream_chat(full_prompt)
-                if hasattr(response, 'response_gen'):
-                    for token in response.response_gen:
-                        yield token
-                elif hasattr(response, 'async_response_gen'):
-                    async for token in response.async_response_gen():
-                        yield token
+                # ReActAgent uses the run() method
+                response = await self.agent.run(full_prompt)
+
+                # Check if response has streaming capabilities
+                if hasattr(response, 'response'):
+                    # Extract the response content
+                    yield str(response.response)
+                elif hasattr(response, 'content'):
+                    yield str(response.content)
                 else:
+                    # Fallback: convert response to string
                     yield str(response)
-            except AttributeError:
+
+            except Exception as e:
+                # Fallback: try synchronous run method
                 try:
-                    # Try older async API
-                    response = await self.agent.achat(full_prompt)
-                    yield str(response)
-                except AttributeError:
-                    try:
-                        # Try basic chat API
-                        response = self.agent.chat(full_prompt)
+                    response = self.agent.run(full_prompt)
+                    if hasattr(response, 'response'):
+                        yield str(response.response)
+                    elif hasattr(response, 'content'):
+                        yield str(response.content)
+                    else:
                         yield str(response)
-                    except AttributeError:
-                        # Last resort - return error message
-                        yield "LlamaIndex agent not properly configured or missing dependencies"
+                except Exception as e2:
+                    error_msg = f"LlamaIndex agent run error: {str(e2)}"
+                    if not self.openai_api_key:
+                        error_msg += " - OpenAI API key is missing or not loaded"
+                    yield error_msg
 
         except Exception as e:
             logger.error(f"Error in stream_response: {str(e)}")
@@ -281,17 +286,31 @@ Only call tools when the user specifically requests an action that requires them
 
         try:
             logger.info(f"Processing user query: {message}")
-            # Use the stream_response method and collect all chunks
-            response_chunks = []
-            async for chunk in self.stream_response(message):
-                if chunk and chunk != "Error: " and not chunk.startswith("Error:"):
-                    response_chunks.append(chunk)
 
-            full_response = "".join(response_chunks)
-            return full_response if full_response else "No response generated"
+            # Use the ReActAgent run method directly
+            response = await self.agent.run(message)
+
+            # Extract the response content
+            if hasattr(response, 'response'):
+                return str(response.response)
+            elif hasattr(response, 'content'):
+                return str(response.content)
+            else:
+                return str(response)
+
         except Exception as e:
-            logger.error(f"Error processing query: {str(e)}")
-            return f"Error: {str(e)}"
+            # Try synchronous run method as fallback
+            try:
+                response = self.agent.run(message)
+                if hasattr(response, 'response'):
+                    return str(response.response)
+                elif hasattr(response, 'content'):
+                    return str(response.content)
+                else:
+                    return str(response)
+            except Exception as e2:
+                logger.error(f"Error processing query: {str(e2)}")
+                return f"Error: {str(e2)}"
 
     async def cleanup(self):
         """Cleanup resources"""

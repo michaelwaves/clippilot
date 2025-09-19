@@ -4,17 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Structure
 
-This is a full-stack application with:
-- **Frontend**: Next.js 14 app with TypeScript, Tailwind CSS, and shadcn/ui components
-- **Backend**: FastAPI server with REST API endpoints for campaigns, analytics, and templates
+This is a full-stack ClipPilot application with:
+- **Frontend**: Next.js 15 app with TypeScript, Tailwind CSS 4, and shadcn/ui components
+- **Backend**: FastAPI server with LlamaIndex MCP agent integration for AI-powered functionality
 
 ## Common Commands
 
-### Frontend (my-app/)
+### Frontend (frontend/)
 ```bash
-cd my-app
-npm run dev        # Start development server on localhost:3000
-npm run build      # Build production bundle
+cd frontend
+npm run dev        # Start development server on localhost:3000 with Turbopack
+npm run build      # Build production bundle with Turbopack
 npm run lint       # Run ESLint
 npm start          # Run production server
 ```
@@ -34,42 +34,65 @@ FastAPI automatically provides:
 ## Architecture Overview
 
 ### Backend API
-The FastAPI backend provides REST API endpoints:
+The FastAPI backend (`backend/main.py`) provides REST API endpoints:
 - **Health Check**: `GET /health` - API health status
-- **Campaigns**: 
+- **Campaigns**:
   - `GET /api/campaigns` - List all campaigns
   - `POST /api/campaigns` - Create new campaign
 - **Analytics**: `GET /api/analytics/overview` - Analytics dashboard data
 - **Templates**: `GET /api/templates` - Available campaign templates
+- **AI Chat System**:
+  - `POST /api/chat/stream` - Streaming chat with LlamaIndex MCP agent
+  - `POST /api/chat/reset/{conversation_id}` - Reset conversation
+  - `GET /api/chat/tools/{conversation_id}` - Get available tools
+  - `POST /api/agent/query` - Direct agent query
+  - `GET /api/agent/status` - Agent health status
 - **CORS**: Configured to accept requests from `http://localhost:3000`
 
+The backend integrates with a **LlamaIndex MCP Agent** (`llamaindex_mcp_agent.py`) that provides:
+- Generic MCP (Model Context Protocol) client integration
+- OpenAI LLM integration with streaming responses
+- Tool discovery and execution capabilities
+- Conversation management with persistent agent instances
+
 ### Frontend Application
-The Next.js application uses App Router and is structured as follows:
-- Authentication system integrated with Supabase for user management
-- Dashboard with multiple features: campaigns, approvals, deployment, templates, analytics, and teams
-- Component organization:
-  - UI components in `my-app/components/ui/` using shadcn/ui
-  - Feature-specific components in respective folders under `my-app/components/`
-- Supabase integration configured in `my-app/lib/supabase/` with client, server, and middleware configurations
-- Middleware handles session updates for authentication
+The Next.js 15 application (`frontend/`) uses App Router with:
+- **Authentication**: Stytch integration for user management
+- **Database**: PostgreSQL with Kysely query builder
+- **Dashboard Structure**:
+  - `/dashboard` - Main dashboard layout
+  - `/dashboard/campaigns` - Campaign management
+  - `/dashboard/assets` - Asset management
+  - `/dashboard/members` - Team member management
+  - `/dashboard/organization` - Organization settings
+  - `/authenticate` - Authentication pages
+- **Component Organization**:
+  - UI components in `frontend/components/ui/` using shadcn/ui (New York style)
+  - Global navigation in `frontend/components/GlobalNavBar.tsx`
+  - Authentication components for login/signup flows
 
 ### Key Dependencies
 
 #### Frontend
-- **Authentication & Database**: Supabase (client-side and SSR)
-- **UI Components**: Radix UI primitives with shadcn/ui styling
-- **Forms**: React Hook Form with Zod validation
-- **Charts**: Recharts for data visualization
-- **Styling**: Tailwind CSS with custom configuration
+- **Framework**: Next.js 15 with React 19
+- **Authentication**: Stytch for modern authentication flows
+- **Database**: PostgreSQL with Kysely query builder and codegen
+- **UI Components**: Radix UI primitives with shadcn/ui (New York variant)
+- **Icons**: Lucide React icon library
+- **Styling**: Tailwind CSS 4 with PostCSS
+- **Development**: Turbopack for fast builds and development
 
 #### Backend
 - **Web Framework**: FastAPI with automatic OpenAPI documentation
+- **AI/ML**: LlamaIndex with OpenAI integration
+- **Agent Framework**: Custom MCP agent with tool discovery
+- **Monitoring**: HoneyHive for observability and tracing
+- **Streaming**: Server-sent events for real-time chat
 - **ASGI Server**: Uvicorn for serving the application
 - **Validation**: Pydantic for request/response validation
-- **Observability**: HoneyHive for monitoring and analytics
 
 ### Environment Variables
-The application requires Supabase configuration:
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- Additional Postgres and JWT configuration for backend services
+The application requires:
+- **Backend**: `OPENAI_API_KEY` for LlamaIndex agent functionality
+- **Frontend**: Stytch configuration for authentication
+- **Database**: PostgreSQL connection configuration
