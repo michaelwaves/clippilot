@@ -1,13 +1,7 @@
 // src/components/LoginOrSignupDiscoveryForm.jsx
 import { StytchB2B } from '@stytch/nextjs/b2b';
-import { AuthFlowType, B2BProducts } from '@stytch/vanilla-js/b2b';
+import { discoveryConfig } from '@/lib/stytchConfig';
 
 export const LoginOrSignupDiscoveryForm = () => {
-    const config = {
-        products: [B2BProducts.emailMagicLinks, B2BProducts.oauth],
-        sessionOptions: { sessionDurationMinutes: 60 },
-        authFlowType: AuthFlowType.Discovery,
-    };
-
-    return <StytchB2B config={config} />;
+    return <StytchB2B config={discoveryConfig} />;
 };

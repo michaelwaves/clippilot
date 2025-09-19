@@ -16,5 +16,10 @@ export default function Authenticate() {
         }
     }, [member, isInitialized, router]);
 
-    return <LoginOrSignupDiscoveryForm />;
+    return (
+        <div className="w-full h-full flex items-center justify-center">
+
+            <LoginOrSignupDiscoveryForm />;
+        </div>
+    )
 }
