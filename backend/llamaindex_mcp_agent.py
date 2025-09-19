@@ -8,6 +8,7 @@ from llama_index.llms.openai import OpenAI
 from llama_index.core.agent import ReActAgent
 from llama_index.core.tools import BaseTool, FunctionTool
 from llama_index.core.callbacks import CallbackManager
+from llama_index.core.agent.workflow import AgentStream
 import logging
 
 load_dotenv()
@@ -183,7 +184,7 @@ Only call tools when the user specifically requests an action that requires them
                 raise e
 
     async def stream_response(self, message: str, system_prompt: str = None) -> AsyncGenerator[str, None]:
-        """Stream response from the agent"""
+        """Stream response from the agent using workflow-based streaming"""
         if not self.agent:
             await self.initialize()
 
@@ -193,31 +194,48 @@ Only call tools when the user specifically requests an action that requires them
             if system_prompt:
                 full_prompt = f"System: {system_prompt}\n\nUser: {message}"
 
-            # Try different streaming approaches based on LlamaIndex version
+            # Start the agent workflow (don't await - we want the handler)
+            handler = self.agent.run(full_prompt)
+
+            logger.info("Starting agent workflow streaming...")
+
+            # Stream events as they come in real-time
+            async for event in handler.stream_events():
+                logger.debug(f"Received event: {type(event).__name__}")
+
+                if isinstance(event, AgentStream):
+                    # This is the actual streaming content from the LLM
+                    if hasattr(event, 'delta') and event.delta:
+                        logger.debug(f"Streaming delta: {event.delta}")
+                        yield str(event.delta)
+                    elif hasattr(event, 'content') and event.content:
+                        logger.debug(f"Streaming content: {event.content}")
+                        yield str(event.content)
+                    else:
+                        logger.debug(f"AgentStream event without delta/content: {event}")
+
+                # We can also handle other event types for debugging
+                # elif isinstance(event, ToolCall):
+                #     logger.info(f"Tool called: {event.tool_name}")
+                #     yield f"\n[Using tool: {event.tool_name}]\n"
+                # elif isinstance(event, ToolCallResult):
+                #     logger.info(f"Tool result received")
+                #     yield f"[Tool completed]\n"
+
+            # If we reach here, the workflow is complete
+            logger.info("Agent workflow streaming completed")
+
+            # Get the final result in case streaming didn't capture everything
             try:
-                # Try newer API
-                response = self.agent.stream_chat(full_prompt)
-                if hasattr(response, 'response_gen'):
-                    for token in response.response_gen:
-                        yield token
-                elif hasattr(response, 'async_response_gen'):
-                    async for token in response.async_response_gen():
-                        yield token
-                else:
-                    yield str(response)
-            except AttributeError:
-                try:
-                    # Try older async API
-                    response = await self.agent.achat(full_prompt)
-                    yield str(response)
-                except AttributeError:
-                    try:
-                        # Try basic chat API
-                        response = self.agent.chat(full_prompt)
-                        yield str(response)
-                    except AttributeError:
-                        # Last resort - return error message
-                        yield "LlamaIndex agent not properly configured or missing dependencies"
+                final_result = await handler.result()
+                if hasattr(final_result, 'response') and final_result.response:
+                    # Only yield if we haven't streamed content yet
+                    response_text = str(final_result.response)
+                    if response_text and response_text.strip():
+                        logger.debug("Yielding final result as fallback")
+                        yield response_text
+            except Exception as e:
+                logger.warning(f"Could not get final result: {e}")
 
         except Exception as e:
             logger.error(f"Error in stream_response: {str(e)}")
@@ -281,17 +299,31 @@ Only call tools when the user specifically requests an action that requires them
 
         try:
             logger.info(f"Processing user query: {message}")
-            # Use the stream_response method and collect all chunks
-            response_chunks = []
-            async for chunk in self.stream_response(message):
-                if chunk and chunk != "Error: " and not chunk.startswith("Error:"):
-                    response_chunks.append(chunk)
 
-            full_response = "".join(response_chunks)
-            return full_response if full_response else "No response generated"
+            # Use the ReActAgent run method directly
+            response = await self.agent.run(message)
+
+            # Extract the response content
+            if hasattr(response, 'response'):
+                return str(response.response)
+            elif hasattr(response, 'content'):
+                return str(response.content)
+            else:
+                return str(response)
+
         except Exception as e:
-            logger.error(f"Error processing query: {str(e)}")
-            return f"Error: {str(e)}"
+            # Try synchronous run method as fallback
+            try:
+                response = self.agent.run(message)
+                if hasattr(response, 'response'):
+                    return str(response.response)
+                elif hasattr(response, 'content'):
+                    return str(response.content)
+                else:
+                    return str(response)
+            except Exception as e2:
+                logger.error(f"Error processing query: {str(e2)}")
+                return f"Error: {str(e2)}"
 
     async def cleanup(self):
         """Cleanup resources"""

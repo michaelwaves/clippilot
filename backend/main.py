@@ -6,7 +6,12 @@ from typing import Optional, List, Dict, Any
 import uvicorn
 import asyncio
 import json
+import os
+from dotenv import load_dotenv
 from llamaindex_mcp_agent import GenericMCPAgent
+
+# Load environment variables from .env file
+load_dotenv()
 
 app = FastAPI(
     title="ClipPilot API",
