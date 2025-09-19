@@ -1,8 +1,6 @@
 "use server"
-import { Assets } from "kysely-codegen"
 import { db } from "./kysely"
-
-export type AssetType = 'image' | 'video' | 'audio' | 'document';
+import { AssetType } from "./types"
 
 export type CreateAssetInput = {
   team_id: string;
