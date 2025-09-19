@@ -4,7 +4,7 @@ import { AuthFlowType, B2BProducts } from '@stytch/vanilla-js/b2b';
 
 export const LoginOrSignupDiscoveryForm = () => {
     const config = {
-        products: [B2BProducts.emailMagicLinks],
+        products: [B2BProducts.emailMagicLinks, B2BProducts.oauth],
         sessionOptions: { sessionDurationMinutes: 60 },
         authFlowType: AuthFlowType.Discovery,
     };
